@@ -17,27 +17,24 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 
+import dadb.AdbShellResponse;
+
+
 public class SendCommands {
 
     private Context context;
     private int status;
+    private Device device;
 
 
     public SendCommands() {
-
     }
 
     public int SendAdbCommands(Context context, final String ip, int port, int forwardport, String localip, int bitrate, int size) {
-        return this.SendAdbCommands(context, null, ip, port, forwardport, localip, bitrate, size);
-    }
-
-    public int SendAdbCommands(Context context, final byte[] fileBase64, final String ip, int port, int forwardport, String localip, int bitrate, int size) {
         this.context = context;
         status = 1;
         String[] commands = new String[]{
-                "-s", ip + ":" + port,
-                "shell",
-                " CLASSPATH=/data/local/tmp/scrcpy-server.jar",
+                "CLASSPATH=/data/local/tmp/scrcpy-server.jar",
                 "app_process",
                 "/",
                 "org.server.scrcpy.Server",
@@ -45,10 +42,10 @@ public class SendCommands {
                 Long.toString(size),
                 Long.toString(bitrate) + ";"
         };
+        this.device = new Device(ip, port, context);
         ThreadUtils.execute(() -> {
             try {
-                // 新版的复制方式
-                newAdbServerStart(context, ip, localip, port, forwardport, commands);
+                newAdbServerStart(context, forwardport, commands);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -71,8 +68,13 @@ public class SendCommands {
             count = 0;
             //  检测程序是否已经启动，如果启动了，该文件会被删除
             while (status == 0 && count < 10) {
-                String adbTextCmd = App.adbCmd("-s", ip + ":" + port, "shell", "ls", "-alh", "/data/local/tmp/scrcpy-server.jar");
-                if (TextUtils.isEmpty(adbTextCmd)) {
+                String serverJarLsResponse = "";
+                try{
+                    serverJarLsResponse = this.device.invoke("ls -alh /data/local/tmp/scrcpy-server.jar").getOutput().trim();
+                }catch(Exception e){
+                }
+                Log.i("Scrcpy", "Checking server jar exists or not");
+                if (TextUtils.isEmpty(serverJarLsResponse)) {
                     break;
                 } else {
                     try {
@@ -88,29 +90,27 @@ public class SendCommands {
     }
 
 
-    private void newAdbServerStart(Context context, String ip, String localip, int port, int serverport, String[] command) {
-        App.adbCmd("connect", ip + ":" + port);
+    private void newAdbServerStart(Context context, int forwardport, String[] commands) {
+        try {
+            this.device.attach();
+            Log.i("Scrcpy", "connected device: " + this.device.invoke("getprop ro.product.model").getAllOutput().trim());
+            // 复制server端到可执行目录
+            this.device.upload(new File(context.getExternalFilesDir("scrcpy"), "scrcpy-server.jar"), "/data/local/tmp/scrcpy-server.jar");
+            Log.i("Scrcpy", "Push successful");
 
-        Log.i("Scrcpy", "adb devices: " + App.adbCmd("devices"));
-        // 复制server端到可执行目录
-        String pushRet = App.adbCmd("-s", ip + ":" + port, "push", new File(
-                context.getExternalFilesDir("scrcpy"), "scrcpy-server.jar"
-        ).getAbsolutePath(), "/data/local/tmp/scrcpy-server.jar");
+            if (TextUtils.isEmpty(this.device.invoke("ls -alh /data/local/tmp/scrcpy-server.jar").getOutput().trim())) {
+                status = 2;
+                return;
+            }
 
-        Log.i("Scrcpy", "pushRet: " + pushRet);
-
-        String adbTextCmd = App.adbCmd("-s", ip + ":" + port, "shell", "ls", "-alh", "/data/local/tmp/scrcpy-server.jar");
-        if (TextUtils.isEmpty(adbTextCmd)) {
-            status = 2;
-            return;
+            // 开启本地端口 forward 转发
+            Log.i("Scrcpy", "开启本地端口转发");
+            this.device.forward(forwardport, 7007, String.join(" ", commands));
+            status = 0;
+            // 执行启动命令
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        // 开启本地端口 forward 转发
-        Log.i("Scrcpy", "开启本地端口转发");
-        App.adbCmd("-s", ip + ":" + port, "forward", "tcp:" + serverport, "tcp:" + 7007);
-
-        status = 0;
-        // 执行启动命令
-        App.adbCmd(command);
     }
 
 }

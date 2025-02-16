@@ -20,7 +20,10 @@ android {
             minifyEnabled false
         }
     }
-
+    packagingOptions {
+        exclude 'META-INF/LICENSE.md'
+        exclude 'META-INF/LICENSE-notice.md'
+    }
     productFlavors {
         scrcpy {
             applicationId "org.client.scrcpy"
@@ -45,4 +48,5 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    implementation 'dev.mobile:dadb:1.2.5'
 }

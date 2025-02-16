@@ -42,7 +42,6 @@ public class ScrcpyHost implements Scrcpy.ServiceCallbacks {
     private static float remote_device_width;
     private static float remote_device_height;
 
-    private byte[] fileBase64;
     private SendCommands sendCommands;
     private String local_ip;
 
@@ -96,35 +95,6 @@ public class ScrcpyHost implements Scrcpy.ServiceCallbacks {
         }
     };
 
-
-    private void exectJar() {
-        AssetManager assetManager = context.getAssets();
-        try {
-            InputStream input_Stream = assetManager.open("scrcpy-server.jar");
-            byte[] buffer = new byte[input_Stream.available()];
-            input_Stream.read(buffer);
-
-            File scrcpyDir = context.getExternalFilesDir("scrcpy");
-            if (!scrcpyDir.exists()) {
-                scrcpyDir.mkdirs();
-            }
-            FileOutputStream outputStream = new FileOutputStream(new File(
-                    context.getExternalFilesDir("scrcpy"), "scrcpy-server.jar"
-            ));
-            Log.d("Scrcpy", "Path: " + new File(
-                    context.getExternalFilesDir("scrcpy"), "scrcpy-server.jar"
-            ));
-            outputStream.write(buffer);
-            outputStream.flush();
-            outputStream.close();
-
-            fileBase64 = Base64.encode(buffer, 2);
-        } catch (IOException e) {
-            Log.e("Asset Manager", e.getMessage());
-        }
-    }
-
-
     public void connect(Context context, String clientIp, int width, int height, int bitrate, Surface display) {
         this.context = context;
         screenWidth = width;
@@ -133,7 +103,6 @@ public class ScrcpyHost implements Scrcpy.ServiceCallbacks {
         surface = display;
         serverAdr = clientIp;
 
-        exectJar();
         sendCommands = new SendCommands();
 
         local_ip = wifiIpAddress();
@@ -151,7 +120,7 @@ public class ScrcpyHost implements Scrcpy.ServiceCallbacks {
             } else {
                 serverHost = serverAdr;
             }
-            if (sendCommands.SendAdbCommands(context, fileBase64, serverHost,
+            if (sendCommands.SendAdbCommands(context, serverHost,
                     serverPort,
                     localForwardPort,
                     Scrcpy.LOCAL_IP,
